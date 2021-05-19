@@ -23,7 +23,7 @@ module.exports = function(grunt) {
                 src : ["src/Cannon.js"],
                 dest : bundlePath,
                 options : {
-                    bundleOptions: {
+                    browserifyOptions: {
                         standalone : "CANNON"
                     }
                 }

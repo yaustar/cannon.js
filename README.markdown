@@ -99,6 +99,19 @@ If you want to know how to use cannon.js with a rendering engine, for example Th
 | Heightfield | -      | -     | -   | -      | -        | -           | (todo)  |
 | Trimesh     | -      | -     | -   | -      | -        | -           | -       |
 
+### Build
+
+Install grunt globally
+```
+npm install -g grunt-cli
+```
+
+Install NPM modules and build the distributions
+```
+npm install
+grunt
+```
+
 ### Todo
 The simpler todos are marked with ```@todo``` in the code. Github Issues can and should also be used for todos.
 
