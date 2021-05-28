@@ -1,3 +1,4 @@
+var AABB = require('../collision/AABB');
 var Vec3 = require('../math/Vec3');
 
 module.exports = Octree;
