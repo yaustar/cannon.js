@@ -1,4 +1,4 @@
-// Wed, 19 May 2021 22:17:56 GMT
+// Fri, 28 May 2021 14:29:46 GMT
 
 /*
  * Copyright (c) 2015 cannon.js Authors
@@ -328,7 +328,7 @@ AABB.prototype.getCorners = function(a, b, c, d, e, f, g, h){
     b.set( u.x, l.y, l.z );
     c.set( u.x, u.y, l.z );
     d.set( l.x, u.y, u.z );
-    e.set( u.x, l.y, l.z );
+    e.set( u.x, l.y, u.z );
     f.set( l.x, u.y, l.z );
     g.set( l.x, l.y, u.z );
     h.copy(u);
@@ -447,6 +447,7 @@ AABB.prototype.overlapsRay = function(ray){
 
     return true;
 };
+
 },{"../math/Vec3":31,"../utils/Utils":54}],4:[function(require,module,exports){
 module.exports = ArrayCollisionMatrix;
 
@@ -1314,6 +1315,8 @@ Ray.prototype.intersectWorld = function (world, options) {
     this.skipBackfaces = !!options.skipBackfaces;
     this.collisionFilterMask = typeof(options.collisionFilterMask) !== 'undefined' ? options.collisionFilterMask : -1;
     this.collisionFilterGroup = typeof(options.collisionFilterGroup) !== 'undefined' ? options.collisionFilterGroup : -1;
+    this.checkCollisionResponse = typeof(options.checkCollisionResponse) !== 'undefined' ? options.checkCollisionResponse : true;
+    
     if(options.from){
         this.from.copy(options.from);
     }
@@ -5774,6 +5777,16 @@ function Body(options){
      */
     this.boundingRadius = 0;
 
+    /**
+	 * Determines if bodies do interact. "collide" event is still triggered.
+	 * @property sensor
+	 * @type {Boolean}
+	 */
+	this.sensor = false;
+	if (options.sensor) {
+		this.sensor = options.sensor;
+	}
+
     this.wlambda = new Vec3();
 
     if(options.shape){
@@ -6068,7 +6081,7 @@ Body.prototype.computeAABB = function(){
         offset.vadd(this.position, offset);
 
         // Get shape world quaternion
-        shapeOrientations[i].mult(bodyQuat, orientation);
+        bodyQuat.mult(shapeOrientations[i], orientation);
 
         // Get shape AABB
         shape.calculateWorldAABB(offset, orientation, shapeAABB.lowerBound, shapeAABB.upperBound);
@@ -8921,7 +8934,7 @@ var tempWorldVertex = new Vec3();
  * @param {Vec3}        min
  * @param {Vec3}        max
  */
-ConvexPolyhedron.prototype.calculateWorldAABB = function(pos,quat,min,max){
+ ConvexPolyhedron.prototype.calculateWorldAABB = function(pos,quat,min,max){
     var n = this.vertices.length, verts = this.vertices;
     var minx,miny,minz,maxx,maxy,maxz;
     for(var i=0; i<n; i++){
@@ -8931,19 +8944,25 @@ ConvexPolyhedron.prototype.calculateWorldAABB = function(pos,quat,min,max){
         var v = tempWorldVertex;
         if     (v.x < minx || minx===undefined){
             minx = v.x;
-        } else if(v.x > maxx || maxx===undefined){
+        } 
+
+        if(v.x > maxx || maxx===undefined){
             maxx = v.x;
         }
 
         if     (v.y < miny || miny===undefined){
             miny = v.y;
-        } else if(v.y > maxy || maxy===undefined){
+        } 
+
+        if(v.y > maxy || maxy===undefined){
             maxy = v.y;
         }
 
         if     (v.z < minz || minz===undefined){
             minz = v.z;
-        } else if(v.z > maxz || maxz===undefined){
+        }  
+
+        if(v.z > maxz || maxz===undefined){
             maxz = v.z;
         }
     }
@@ -10912,7 +10931,9 @@ Solver.prototype.solve = function(dt,world){
  */
 Solver.prototype.addEquation = function(eq){
     if (eq.enabled) {
-        this.equations.push(eq);
+		if (!(eq.bi.sensor || eq.bj.sensor)) {
+			this.equations.push(eq);
+		}
     }
 };
 
@@ -11417,15 +11438,11 @@ OctreeNode.prototype.rayQuery = function(ray, treeTransform, result) {
  * @method removeEmptyNodes
  */
 OctreeNode.prototype.removeEmptyNodes = function() {
-    var queue = [this];
-    while (queue.length) {
-        var node = queue.pop();
-        for (var i = node.children.length - 1; i >= 0; i--) {
-            if(!node.children[i].data.length){
-                node.children.splice(i, 1);
-            }
+    for (var i = this.children.length - 1; i >= 0; i--) {
+        this.children[i].removeEmptyNodes();
+        if(!this.children[i].children.length && !this.children[i].data.length) {
+            this.children.splice(i, 1);
         }
-        Array.prototype.push.apply(queue, node.children);
     }
 };
 
@@ -12234,6 +12251,8 @@ Narrowphase.prototype.sphereTrimesh = function (
                     tmp.vsub(localSpherePos, r.ni);
                     r.ni.normalize();
                     r.ni.scale(sphereShape.radius, r.ri);
+                    r.ri.vadd(spherePos, r.ri);
+                    r.ri.vsub(sphereBody.position, r.ri);
 
                     Transform.pointToWorldFrame(trimeshPos, trimeshQuat, tmp, tmp);
                     tmp.vsub(trimeshBody.position, r.rj);
@@ -12272,7 +12291,9 @@ Narrowphase.prototype.sphereTrimesh = function (
             tmp.vsub(localSpherePos, r.ni);
             r.ni.normalize();
             r.ni.scale(sphereShape.radius, r.ri);
-
+            r.ri.vadd(spherePos, r.ri);
+            r.ri.vsub(sphereBody.position, r.ri);
+            
             Transform.pointToWorldFrame(trimeshPos, trimeshQuat, tmp, tmp);
             tmp.vsub(trimeshBody.position, r.rj);
 
@@ -13421,7 +13442,7 @@ Narrowphase.prototype.sphereHeightfield = function (
         iMaxY = Math.ceil((localSpherePos.y + radius) / w) + 1;
 
     // Bail out if we are out of the terrain
-    if(iMaxX < 0 || iMaxY < 0 || iMinX > data.length || iMaxY > data[0].length){
+    if(iMaxX < 0 || iMaxY < 0 || iMinX > data.length || iMinY > data[0].length) {
         return;
     }
 
@@ -14013,10 +14034,8 @@ var step_tmp1 = new Vec3();
  */
 World.prototype.step = function(dt, timeSinceLastCalled, maxSubSteps){
     maxSubSteps = maxSubSteps || 10;
-    timeSinceLastCalled = timeSinceLastCalled || 0;
 
-    if(timeSinceLastCalled === 0){ // Fixed, simple stepping
-
+    if(typeof timeSinceLastCalled === 'undefined'){ // Fixed, simple stepping
         this.internalStep(dt);
 
         // Increment time
@@ -14033,7 +14052,10 @@ World.prototype.step = function(dt, timeSinceLastCalled, maxSubSteps){
             substeps++;
         }
 
-        var t = (this.accumulator % dt) / dt;
+        // Get rid of excess simulation time
+        this.accumulator %= dt;
+
+        var t = this.accumulator / dt;
         for(var j=0; j !== this.bodies.length; j++){
             var b = this.bodies[j];
             b.previousPosition.lerp(b.position, t, b.interpolatedPosition);
