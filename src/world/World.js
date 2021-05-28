@@ -520,10 +520,8 @@ var step_tmp1 = new Vec3();
  */
 World.prototype.step = function(dt, timeSinceLastCalled, maxSubSteps){
     maxSubSteps = maxSubSteps || 10;
-    timeSinceLastCalled = timeSinceLastCalled || 0;
 
-    if(timeSinceLastCalled === 0){ // Fixed, simple stepping
-
+    if(typeof timeSinceLastCalled === 'undefined'){ // Fixed, simple stepping
         this.internalStep(dt);
 
         // Increment time
@@ -540,7 +538,10 @@ World.prototype.step = function(dt, timeSinceLastCalled, maxSubSteps){
             substeps++;
         }
 
-        var t = (this.accumulator % dt) / dt;
+        // Get rid of excess simulation time
+        this.accumulator %= dt;
+
+        var t = this.accumulator / dt;
         for(var j=0; j !== this.bodies.length; j++){
             var b = this.bodies[j];
             b.previousPosition.lerp(b.position, t, b.interpolatedPosition);
